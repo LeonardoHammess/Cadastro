@@ -30,7 +30,7 @@ while op != 5:
             print("Cadastro cheio")
         else:
             n = input("Nome: ")
-            i = int(input("Idade: "))
+            i = int(input("Idadee: "))
             e = input("E-mail: ")
             if qtd == 0:
                 nome1 = n
