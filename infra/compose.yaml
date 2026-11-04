@@ -1,0 +1,51 @@
+services:
+  principal:
+    image: mysql:8.4.13
+    command: [
+      "--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW",
+      "--gtid-mode=ON", "--enforce-gtid-consistency=ON",
+      "--skip-name-resolve=ON"
+    ]
+    environment:
+      MYSQL_ROOT_PASSWORD: root_lab_2026
+    ports: ["127.0.0.1:3307:3306"]
+    volumes:
+      - principal-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+    replica:
+      image: mysql:8.4.13
+      command: [
+        "--server-id=2", "--relay-log=relay-bin", "--relay-log-recovery=ON",
+        "--log-bin=mysql-bin", "--log-replica-updates=ON", "--binlog-format=ROW",
+        "--gtid-mode=ON", "--enforce-gtid-consistency=ON",
+        "--skip-name-resolve=ON"
+      ]
+      environment:
+        MYSQL_ROOT_PASSWORD: root_lab_2026
+      ports: ["127.0.0.1:3308:3306"]
+      volumes:
+        - replica-data:/var/lib/mysql
+      depends_on:
+        principal:
+          condition: service_healthy
+      healthcheck:
+        test:
+          - CMD-SHELL
+          - mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent
+        interval: 5s
+        timeout: 3s
+        retries: 20
+        start_period: 20s
+        restart: unless-stopped
+        
+volumes:
+ principal-data:
+ replica-dat
