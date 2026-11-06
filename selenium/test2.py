@@ -1,10 +1,13 @@
+"""Testes de automação utilizando Selenium."""
+
+from time import sleep
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from time import sleep
 
-driver = webdriver.Edge()
+driver = webdriver.Edge() # pylint: disable=not-callable
 try:
     driver.get("https://the-internet.herokuapp.com/login")
     wait = WebDriverWait(driver, 10)
