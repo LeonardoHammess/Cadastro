@@ -35,9 +35,10 @@ class CadastroPessoas:
         if pessoa is None:
             return None
 
-        pessoa.setNome(novo_nome)
-        pessoa.setIdade(nova_idade)
-        pessoa.setEmail(novo_email)
+        nova_pessoa = Pessoa(novo_nome, nova_idade, novo_email)
 
-        return pessoa
+        if self.__repositorio.alterar(nome, nova_pessoa):
+            return nova_pessoa
+
+        return None
     
