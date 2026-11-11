@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pessoa import Pessoa
 from repositorio_pessoas import RepositorioPessoas
-from repositorio_pessoas_memoria import RepositorioPessoasMemoria
+from repositorios.repositorio_pessoas_memoria import RepositorioPessoasMemoria
 
 
 class CadastroPessoas:
