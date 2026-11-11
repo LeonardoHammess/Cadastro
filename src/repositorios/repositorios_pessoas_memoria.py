@@ -18,7 +18,7 @@ class RepositorioPessoasMemoria(RepositorioPessoas):
         for pessoa in self.__pessoas:
             if pessoa.getNome() == nome:
                 return pessoa
-            return None
+        return None
 
     def listar(self) -> List[Pessoa]:
         return list(self.__pessoas)
@@ -28,4 +28,4 @@ class RepositorioPessoasMemoria(RepositorioPessoas):
             if pessoa.getNome() == nome:
                 self.__pessoas[indice] = nova_pessoa
                 return True
-            return False
+        return False
