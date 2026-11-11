@@ -66,7 +66,7 @@ def alterar_pessoa(cadastro):
         nova_idade = int(input("Nova idade: "))
         novo_email = input("Novo e-mail: ")
 
-        cadastro.alterar(
+        pessoa = cadastro.alterar(
             procurado,
             novo_nome,
             nova_idade,

@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pessoa import Pessoa
 from repositorio_pessoas import RepositorioPessoas
-from repositorio_pessoas_memoria import RepositorioPessoasMemoria
+from repositorios.repositorios_pessoas_memoria import RepositorioPessoasMemoria
 
 
 class CadastroPessoas:
@@ -30,15 +30,9 @@ class CadastroPessoas:
         return self.__repositorio.listar()
 
     def alterar(self, nome, novo_nome, nova_idade, novo_email):
-        pessoa = self.buscarPorNome(nome)
-
-        if pessoa is None:
-            return None
-
         nova_pessoa = Pessoa(novo_nome, nova_idade, novo_email)
 
-        if self.__repositorio.alterar(nome, nova_pessoa):
-            return nova_pessoa
+        if not self.__repositorio.alterar(nome, nova_pessoa):
+            return None
 
-        return None
-    
+        return nova_pessoa
