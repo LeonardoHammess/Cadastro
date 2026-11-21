@@ -1,129 +1,114 @@
-"""Implementação em MySQL do repositório de pessoas."""
+"""Implementação do repositório de pessoas utilizando MySQL."""
 
 import os
-from dataclasses import dataclass
+
 from typing import List, Optional
 
-import pymysql
-from pymysql.constants import CLIENT
+import mysql.connector
+from mysql.connector.constants import ClientFlag
 
 from pessoa import Pessoa
 from repositorio_pessoas import RepositorioPessoas
 
 
-@dataclass(frozen=True)
-class ConfiguracaoMySQL:
-    """Parâmetros de conexão com o servidor MySQL."""
+class RepositorioPessoasMySQL(RepositorioPessoas):
+    """Persiste pessoas na tabela pessoa do MySQL principal."""
 
-    host: str = "127.0.0.1"
-    porta: int = 3307
-    usuario: str = "root"
-    senha: str = ""
-    banco: str = "cadastro"
+    def __init__(self, host, port, usuario, senha, banco):
+        self._config = {
+            "host": host,
+            "port": port,
+            "user": usuario,
+            "password": senha,
+            "database": banco,
+            "client_flags": [ClientFlag.FOUND_ROWS],
+        }
 
     @classmethod
-    def doAmbiente(cls) -> "ConfiguracaoMySQL":
-        """Lê a configuração das variáveis de ambiente MYSQL_*."""
-        padrao = cls()
+    def a_partir_do_ambiente(cls):
+        """Lê a configuração das variáveis de ambiente."""
         return cls(
-            host=os.environ.get("MYSQL_HOST", padrao.host),
-            porta=int(os.environ.get("MYSQL_PORT", str(padrao.porta))),
-            usuario=os.environ.get("MYSQL_USER", padrao.usuario),
-            senha=os.environ.get("MYSQL_PASSWORD", padrao.senha),
-            banco=os.environ.get("MYSQL_DATABASE", padrao.banco),
+            host=os.environ.get("DB_HOST", "localhost"),
+            port=int(os.environ["DB_PORT"]),
+            usuario=os.environ["DB_USER"],
+            senha=os.environ["DB_PASSWORD"],
+            banco=os.environ.get("DB_NAME", "cadastro"),
         )
 
+    def _conectar(self):
+        """Abre uma nova conexão com o MySQL principal."""
+        return mysql.connector.connect(**self._config)
 
-class RepositorioPessoasMySQL(RepositorioPessoas):
-    """Armazena pessoas em uma tabela de um banco de dados MySQL."""
+    def _executar(self, sql, valores):
+        """Executa INSERT/UPDATE em transação; devolve linhas afetadas."""
+        conexao = self._conectar()
+        try:
+            cursor = conexao.cursor()
+            try:
+                cursor.execute(sql, valores)
+                conexao.commit()
+                return cursor.rowcount
+            finally:
+                cursor.close()
+        except mysql.connector.Error:
+            conexao.rollback()
+            raise
+        finally:
+            conexao.close()
 
-    _SQL_CRIAR_TABELA = (
-        "CREATE TABLE IF NOT EXISTS pessoas ("
-        " id INT AUTO_INCREMENT PRIMARY KEY,"
-        " nome VARCHAR(100) NOT NULL,"
-        " idade INT NOT NULL,"
-        " email VARCHAR(255) NOT NULL,"
-        " INDEX idx_pessoas_nome (nome)"
-        ")"
-    )
-
-    def __init__(self, configuracao: Optional[ConfiguracaoMySQL] = None) -> None:
-        if configuracao is None:
-            configuracao = ConfiguracaoMySQL.doAmbiente()
-
-        if not configuracao.banco.isidentifier():
-            raise ValueError(f"Nome de banco inválido: {configuracao.banco!r}")
-
-        self.__configuracao = configuracao
-        self._criarEstrutura()
-
-    def _conectar(self, usar_banco: bool = True) -> pymysql.connections.Connection:
-        # FOUND_ROWS faz o UPDATE informar as linhas encontradas, e não apenas
-        # as modificadas, para que alterar() retorne True mesmo sem mudanças.
-        return pymysql.connect(
-            host=self.__configuracao.host,
-            port=self.__configuracao.porta,
-            user=self.__configuracao.usuario,
-            password=self.__configuracao.senha,
-            database=self.__configuracao.banco if usar_banco else None,
-            charset="utf8mb4",
-            client_flag=CLIENT.FOUND_ROWS,
-            autocommit=True,
-        )
-
-    def _criarEstrutura(self) -> None:
-        with self._conectar(usar_banco=False) as conexao:
-            with conexao.cursor() as cursor:
-                cursor.execute(
-                    f"CREATE DATABASE IF NOT EXISTS `{self.__configuracao.banco}`"
-                )
-                cursor.execute(f"USE `{self.__configuracao.banco}`")
-                cursor.execute(self._SQL_CRIAR_TABELA)
+    def _consultar(self, sql, valores=()):
+        """Executa um SELECT e devolve todas as linhas."""
+        conexao = self._conectar()
+        try:
+            cursor = conexao.cursor()
+            try:
+                cursor.execute(sql, valores)
+                return cursor.fetchall()
+            finally:
+                cursor.close()
+        finally:
+            conexao.close()
 
     def cadastrar(self, pessoa: Pessoa) -> None:
-        with self._conectar() as conexao:
-            with conexao.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO pessoas (nome, idade, email) VALUES (%s, %s, %s)",
-                    (pessoa.getNome(), pessoa.getIdade(), pessoa.getEmail()),
-                )
+        sql = (
+            "INSERT INTO pessoa (nome, idade, email) "
+            "VALUES (%s, %s, %s)"
+        )
+        valores = (
+            pessoa.getNome(),
+            pessoa.getIdade(),
+            pessoa.getEmail(),
+        )
+        self._executar(sql, valores)
 
     def buscar(self, nome: str) -> Optional[Pessoa]:
-        with self._conectar() as conexao:
-            with conexao.cursor() as cursor:
-                cursor.execute(
-                    "SELECT nome, idade, email FROM pessoas"
-                    " WHERE nome = %s ORDER BY id LIMIT 1",
-                    (nome,),
-                )
-                linha = cursor.fetchone()
-
-        if linha is None:
-            return None
-
-        return Pessoa(*linha)
+        sql = (
+            "SELECT nome, idade, email FROM pessoa "
+            "WHERE nome = %s ORDER BY id LIMIT 1"
+        )
+        linhas = self._consultar(sql, (nome,))
+        return self._para_pessoa(linhas[0]) if linhas else None
 
     def listar(self) -> List[Pessoa]:
-        with self._conectar() as conexao:
-            with conexao.cursor() as cursor:
-                cursor.execute("SELECT nome, idade, email FROM pessoas ORDER BY id")
-                linhas = cursor.fetchall()
+        sql = "SELECT nome, idade, email FROM pessoa ORDER BY id"
+        linhas = self._consultar(sql)
+        return [self._para_pessoa(linha) for linha in linhas]
 
-        return [Pessoa(*linha) for linha in linhas]
+    @staticmethod
+    def _para_pessoa(linha) -> Pessoa:
+        nome, idade, email = linha
+        return Pessoa(nome, idade, email)
 
     def alterar(self, nome: str, nova_pessoa: Pessoa) -> bool:
-        with self._conectar() as conexao:
-            with conexao.cursor() as cursor:
-                linhas_afetadas = cursor.execute(
-                    "UPDATE pessoas SET nome = %s, idade = %s, email = %s"
-                    " WHERE id = (SELECT id FROM ("
-                    "SELECT MIN(id) AS id FROM pessoas WHERE nome = %s) AS alvo)",
-                    (
-                        nova_pessoa.getNome(),
-                        nova_pessoa.getIdade(),
-                        nova_pessoa.getEmail(),
-                        nome,
-                    ),
-                )
-
-        return linhas_afetadas > 0
+        sql = (
+            "UPDATE pessoa SET nome = %s, idade = %s, email = %s "
+            "WHERE nome = %s"
+        )
+        valores = (
+            nova_pessoa.getNome(),
+            nova_pessoa.getIdade(),
+            nova_pessoa.getEmail(),
+            nome,
+        )
+        return self._executar(sql, valores) > 0
+    
